@@ -1,49 +1,51 @@
 import Stripe from "stripe";
 import Course from "../models/Course.js";
 import { Purchase } from "../models/Purchase.js";
-import User from  "../models/User.js"
+import User from "../models/User.js"
 
 
 
 // Get All courses
 
-export const getAllCourse  = async ( req, res)=>{
-    try{
+export const getAllCourse = async (req, res) => {
+  try {
 
- const  courses = await  Course.find({isPublished:"approved"})
- .select(['-courseContent', '-enrolledStudents']).populate({path: 'educator' })
+    const courses = await Course.find({ isPublished: "approved" })
+      .select(['-courseContent', '-enrolledStudents']).populate({ path: 'educator' })
 
 
- res.json({ success:true , courses})
-    }catch(error){
+    res.json({ success: true, courses })
+  } catch (error) {
 
-        res.json({
-            success:false , message:error.message
-        })
-    }
+    res.json({
+      success: false, message: error.message
+    })
+  }
 }
 
 
 // Get Course by Id
 
-export const getCourseId = async (req,res)=>{
-     const {id} = req.params
-     try{
-        const courseData = await Course.findById(id).populate({path: 'educator' })
+export const getCourseId = async (req, res) => {
+  const { id } = req.params
+  try {
+    const courseData = await Course.findById(id).populate({ path: 'educator' })
 
-        // Remove  LectureUrl if is PreviewFree is false
-        courseData.courseContent.forEach(chapter=>{
-            chapter.chapterContent.forEach(lecture =>{
-                if(!lecture.isPreviewFree){
-                    lecture.lectureUrl  = "" ;
-                }
-            })
-        })
-        res.json({success:true , courseData})
+    // Remove  LectureUrl if is PreviewFree is false
+    courseData.courseContent.forEach(chapter => {
+      chapter.chapterContent.forEach(lecture => {
+        if (!lecture.isPreviewFree) {
+          lecture.lectureUrl = "";
+        }
+      })
+    })
 
-     }catch(error){
- res.json({success:false , message:error.message})
-     }
+    const FindEductor = await User.findById(courseData.educator).select(['-enrolledCourses'])
+    res.json({ success: true, courseData, FindEductor })
+
+  } catch (error) {
+    res.json({ success: false, message: error.message })
+  }
 }
 
 
