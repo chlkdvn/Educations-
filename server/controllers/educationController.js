@@ -7,7 +7,7 @@ import User from "../models/User.js"
 import Educator from "../models/EducatorVerification.js"
 import { CertificateRequest } from '../models/CertificateRequest.js';
 import { Wallet } from "../models/wallet.js"
-
+import { Readable } from 'stream'; // Node built-in
 export const updateRoleToEducator = async (req, res) => {
   try {
     const userId = req.auth.userId
@@ -30,435 +30,144 @@ export const updateRoleToEducator = async (req, res) => {
 
 
 
-
 const categories = [
-  '3D Design',
-  'Arts & Humanities',
-  'Graphic Design',
-  'Web Development',
-  'Marketing',
-  'App Development',
-  'Frontend Development',
-  'Backend Engineering',
-  'Data Science',
-  'AI & Machine Learning',
-  'Cybersecurity',
-  'Cloud Computing',
-  'Mobile Development',
-  'UI/UX Design',
-  'Software Engineering'
+  '3D Design', 'Arts & Humanities', 'Graphic Design', 'Web Development', 'Marketing',
+  'App Development', 'Frontend Development', 'Backend Engineering', 'Data Science',
+  'AI & Machine Learning', 'Cybersecurity', 'Cloud Computing', 'Mobile Development',
+  'UI/UX Design', 'Software Engineering'
 ];
 
 export const addCourse = async (req, res) => {
   try {
     const { courseData } = req.body;
     const imageFile = req.file;
-    const educatorId = req.auth.userId; // Clerk user ID
+    const educatorId = req.auth.userId; // Clerk
 
-    console.log('Educator ID from auth:', educatorId);
+    /* ---------- basic checks ---------- */
+    if (!imageFile) return res.status(400).json({ success: false, message: 'Course thumbnail is required' });
+    if (!courseData) return res.status(400).json({ success: false, message: 'Course data is required' });
 
-    // Validate required fields
-    if (!imageFile) {
-      return res.status(400).json({
-        success: false,
-        message: "Course thumbnail is required"
-      });
+    let data;
+    try { data = JSON.parse(courseData); } catch {
+      return res.status(400).json({ success: false, message: 'Invalid course data format' });
     }
 
-    if (!courseData) {
-      return res.status(400).json({
-        success: false,
-        message: "Course data is required"
-      });
+    const required = ['courseTitle', 'courseDescription', 'coursePrice', 'courseType', 'category'];
+    const missing = required.filter(f => !data[f]);
+    if (missing.length) return res.status(400).json({ success: false, message: `Missing: ${missing.join(', ')}` });
+    if (!categories.includes(data.category)) return res.status(400).json({ success: false, message: `Category must be one of: ${categories.join(', ')}` });
+
+    /* ---- NEW: promoUrl ---- */
+    if (data.promoUrl) {
+      try { new URL(data.promoUrl); }
+      catch { return res.status(400).json({ success: false, message: 'Invalid promo video URL' }); }
     }
 
-    // Parse course data
-    let parsedCourseData;
-    try {
-      parsedCourseData = JSON.parse(courseData);
-    } catch (parseError) {
-      console.error('Course data parse error:', parseError);
-      return res.status(400).json({
-        success: false,
-        message: "Invalid course data format"
-      });
-    }
+    /* ---- price / discount / type / content ---- */
+    if (data.coursePrice < 0) return res.status(400).json({ success: false, message: 'Price cannot be negative' });
+    const discount = Math.min(100, Math.max(0, Number(data.discount || 0)));
+    if (!['basic', 'premium'].includes(data.courseType)) return res.status(400).json({ success: false, message: "courseType must be 'basic' or 'premium'" });
+    if (!Array.isArray(data.courseContent) || !data.courseContent.length) return res.status(400).json({ success: false, message: 'At least one chapter is required' });
 
-    console.log('Parsed course data structure:', {
-      hasCourseContent: !!parsedCourseData.courseContent,
-      courseContentLength: parsedCourseData.courseContent?.length || 0,
-      courseType: parsedCourseData.courseType,
-      category: parsedCourseData.category,
-      hasPremiumFeatures: !!parsedCourseData.premiumFeatures,
-      tags: parsedCourseData.tags?.length || 0,
-      requirements: parsedCourseData.requirements?.length || 0,
-      learningOutcomes: parsedCourseData.learningOutcomes?.length || 0
-    });
-
-    // Validate required fields - now including 'category'
-    const requiredFields = ['courseTitle', 'courseDescription', 'coursePrice', 'courseType', 'category'];
-    const missingFields = requiredFields.filter(field => !parsedCourseData[field]);
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Missing required fields: ${missingFields.join(', ')}`
-      });
-    }
-
-    // Validate category
-    if (!categories.includes(parsedCourseData.category)) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid category. Must be one of: ${categories.join(', ')}`
-      });
-    }
-
-    // Validate course price
-    if (parsedCourseData.coursePrice < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Course price cannot be negative"
-      });
-    }
-
-    // Validate discount
-    const discount = parsedCourseData.discount || 0;
-    if (discount < 0 || discount > 100) {
-      return res.status(400).json({
-        success: false,
-        message: "Discount must be between 0 and 100"
-      });
-    }
-
-    // Validate course type
-    if (!['basic', 'premium'].includes(parsedCourseData.courseType)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid course type. Must be 'basic' or 'premium'"
-      });
-    }
-
-    // Validate course content structure
-    if (!parsedCourseData.courseContent || !Array.isArray(parsedCourseData.courseContent)) {
-      return res.status(400).json({
-        success: false,
-        message: "Course content is required and must be an array"
-      });
-    }
-
-    if (parsedCourseData.courseContent.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Course must have at least one chapter"
-      });
-    }
-
-    // Validate each chapter and lecture (same as before)
-    for (let i = 0; i < parsedCourseData.courseContent.length; i++) {
-      const chapter = parsedCourseData.courseContent[i];
-      if (!chapter.chapterId || !chapter.chapterTitle) {
-        return res.status(400).json({
-          success: false,
-          message: `Chapter ${i + 1}: chapterId and chapterTitle are required`
-        });
-      }
-
-      if (!chapter.chapterContent || !Array.isArray(chapter.chapterContent)) {
-        return res.status(400).json({
-          success: false,
-          message: `Chapter "${chapter.chapterTitle}" must have lecture content`
-        });
-      }
-
-      if (chapter.chapterContent.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Chapter "${chapter.chapterTitle}" must have at least one lecture`
-        });
-      }
-
-      for (let j = 0; j < chapter.chapterContent.length; j++) {
-        const lecture = chapter.chapterContent[j];
-        if (!lecture.lectureId || !lecture.lectureTitle || !lecture.lectureUrl) {
-          return res.status(400).json({
-            success: false,
-            message: `Chapter "${chapter.chapterTitle}", Lecture ${j + 1}: lectureId, lectureTitle, and lectureUrl are required`
-          });
-        }
-
-        // Validate video URL
-        try {
-          new URL(lecture.lectureUrl);
-        } catch (urlError) {
-          return res.status(400).json({
-            success: false,
-            message: `Chapter "${chapter.chapterTitle}", Lecture "${lecture.lectureTitle}": Invalid video URL format`
-          });
-        }
-
-        // Validate and parse duration
-        const duration = parseInt(lecture.lectureDuration);
-        if (isNaN(duration) || duration <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Chapter "${chapter.chapterTitle}", Lecture "${lecture.lectureTitle}": Lecture duration must be a positive number`
-          });
-        }
-        chapter.chapterContent[j].lectureDuration = duration;
-      }
-    }
-
-    // Premium features validation (unchanged, kept for completeness)
-    if (parsedCourseData.courseType === 'premium') {
-      if (!parsedCourseData.premiumFeatures) {
-        return res.status(400).json({
-          success: false,
-          message: "Premium features are required for premium courses"
-        });
-      }
-
-      // Social links defaults and validation
-      if (!parsedCourseData.premiumFeatures.socialLinks) {
-        parsedCourseData.premiumFeatures.socialLinks = {
-          facebook: '',
-          whatsapp: '',
-          telegram: '',
-          discord: '',
-          linkedin: '',
-          twitter: ''
-        };
-      }
-
-      const socialLinks = parsedCourseData.premiumFeatures.socialLinks;
-      const urlFields = ['facebook', 'whatsapp', 'telegram', 'discord', 'linkedin', 'twitter'];
-      for (const field of urlFields) {
-        if (socialLinks[field] && socialLinks[field].trim() !== '') {
-          try {
-            new URL(socialLinks[field]);
-          } catch (urlError) {
-            return res.status(400).json({
-              success: false,
-              message: `Invalid URL format for ${field}. Please provide a valid URL.`
-            });
-          }
-        }
-      }
-
-      // Assistance hours
-      if (parsedCourseData.premiumFeatures.assistanceHours !== undefined) {
-        const assistanceHours = parseInt(parsedCourseData.premiumFeatures.assistanceHours);
-        if (isNaN(assistanceHours) || assistanceHours < 0) {
-          return res.status(400).json({
-            success: false,
-            message: "Assistance hours must be a non-negative number"
-          });
-        }
-        parsedCourseData.premiumFeatures.assistanceHours = assistanceHours;
-      } else {
-        parsedCourseData.premiumFeatures.assistanceHours = 5;
-      }
-
-      // Handouts validation
-      if (parsedCourseData.premiumFeatures.handouts && Array.isArray(parsedCourseData.premiumFeatures.handouts)) {
-        for (const handout of parsedCourseData.premiumFeatures.handouts) {
-          if (!handout.id || !handout.name || !handout.url) {
-            return res.status(400).json({
-              success: false,
-              message: "Invalid handout data - id, name, and url are required"
-            });
-          }
-          try {
-            new URL(handout.url);
-          } catch (urlError) {
-            return res.status(400).json({
-              success: false,
-              message: `Invalid URL for handout: ${handout.name}`
-            });
-          }
-          if (handout.size && (isNaN(handout.size) || handout.size <= 0)) {
-            return res.status(400).json({
-              success: false,
-              message: `Invalid file size for handout: ${handout.name}`
-            });
-          }
-        }
-      } else {
-        parsedCourseData.premiumFeatures.handouts = [];
-      }
-
-      // Default premium feature flags
-      const premiumDefaults = {
-        hasInstructorAssistance: false,
-        assistanceSchedule: '',
-        hasCommunityAccess: false,
-        communityType: 'discord',
-        hasLiveSessions: false,
-        liveSessionSchedule: '',
-        hasCertificate: false,
-        hasStudyGroups: false,
-        hasQnASessions: false,
-        qnaSchedule: '',
-        hasCareerSupport: false
-      };
-
-      for (const [key, defaultValue] of Object.entries(premiumDefaults)) {
-        if (parsedCourseData.premiumFeatures[key] === undefined) {
-          parsedCourseData.premiumFeatures[key] = defaultValue;
-        }
-      }
-    }
-
-    // Upload thumbnail to Cloudinary
+    /* ---- MEMORY → Cloudinary upload ---- */
     let thumbnailUrl;
     try {
-      const imageUpload = await cloudinary.uploader.upload(imageFile.path, {
-        folder: 'course-thumbnails',
-        resource_type: 'image',
-        transformation: [
-          { width: 1280, height: 720, crop: 'fill' },
-          { quality: 'auto:good' }
-        ]
+      const stream = Readable.from(imageFile.buffer); // buffer → stream
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: 'course-thumbnails',
+            resource_type: 'image',
+            transformation: [{ width: 1280, height: 720, crop: 'fill' }, { quality: 'auto:good' }]
+          },
+          (err, callResult) => {
+            if (err) return reject(err);
+            resolve(callResult);
+          }
+        ).end(imageFile.buffer); // pipe buffer into Cloudinary
       });
-      thumbnailUrl = imageUpload.secure_url;
-
-      // Clean up temp file
-      const fs = await import('fs');
-      if (imageFile.path) {
-        fs.unlinkSync(imageFile.path);
-      }
+      thumbnailUrl = result.secure_url;
     } catch (uploadError) {
-      console.error('Thumbnail upload error:', uploadError);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to upload course thumbnail to Cloudinary"
-      });
+      console.error('Cloudinary upload error:', uploadError);
+      return res.status(500).json({ success: false, message: 'Thumbnail upload failed' });
     }
 
-    // Calculate total lectures and duration
-    let totalLectures = 0;
-    let totalDuration = 0;
-    parsedCourseData.courseContent.forEach(chapter => {
-      if (chapter.chapterContent && Array.isArray(chapter.chapterContent)) {
-        totalLectures += chapter.chapterContent.length;
-        chapter.chapterContent.forEach(lecture => {
-          totalDuration += lecture.lectureDuration || 0;
-        });
-      }
+    /* ---- totals ---- */
+    let totalLectures = 0, totalDuration = 0;
+    data.courseContent.forEach(ch => {
+      totalLectures += (ch.chapterContent?.length || 0);
+      ch.chapterContent?.forEach(l => totalDuration += (l.lectureDuration || 0));
     });
 
-    // Prepare final course data
-    const courseToCreate = {
-      ...parsedCourseData,
+    /* ---- create document ---- */
+    const doc = await Course.create({
+      ...data,
       educator: educatorId,
       courseThumbnail: thumbnailUrl,
-      isPublished: "pending",
+      isPublished: 'pending',
       enrolledStudents: [],
       courseRatings: [],
       totalLectures,
       totalDuration,
       averageRating: 0,
       totalReviews: 0,
-      category: parsedCourseData.category, // Added category
-      premiumFeatures: parsedCourseData.courseType === 'premium' ? parsedCourseData.premiumFeatures : null,
-      tags: parsedCourseData.tags || [],
-      difficulty: parsedCourseData.difficulty || 'beginner',
-      language: parsedCourseData.language || 'English',
-      requirements: parsedCourseData.requirements || [],
-      learningOutcomes: parsedCourseData.learningOutcomes || [],
       completionRate: 0,
       isFeatured: false,
       isApproved: false,
       approvalStatus: 'pending',
-      coursePrice: parseFloat(parsedCourseData.coursePrice) || 0,
-      discount: parseFloat(discount) || 0
-    };
+      discount,
+      promoUrl: data.promoUrl || '', // <-- NEW
+      premiumFeatures: data.courseType === 'premium' ? data.premiumFeatures : null,
+      tags: data.tags || [],
+      difficulty: data.difficulty || 'beginner',
+      language: data.language || 'English',
+      requirements: data.requirements || [],
+      learningOutcomes: data.learningOutcomes || [],
+      submissionDate: new Date()
+    });
 
-    // Create course
-    const newCourse = await Course.create(courseToCreate);
-
-    // Format duration and final price for response
-    const formattedDuration = (() => {
-      const hours = Math.floor(totalDuration / 60);
-      const minutes = totalDuration % 60;
-      return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-    })();
-
-    const finalPrice = (() => {
-      const price = parseFloat(parsedCourseData.coursePrice) || 0;
-      const discountValue = parseFloat(discount) || 0;
-      return discountValue > 0 ? price - (price * discountValue / 100) : price;
-    })();
-
+    /* ---- response ---- */
     res.status(201).json({
       success: true,
-      message: "Course created successfully",
+      message: 'Course created successfully',
       course: {
-        id: newCourse._id,
-        title: newCourse.courseTitle,
-        type: newCourse.courseType,
-        category: newCourse.category, // Included in response
-        description: newCourse.courseDescription,
-        thumbnail: newCourse.courseThumbnail,
-        price: newCourse.coursePrice,
-        discount: newCourse.discount,
-        totalLectures: newCourse.totalLectures,
-        totalDuration: newCourse.totalDuration,
-        formattedDuration,
-        finalPrice,
-        isPremium: newCourse.courseType === 'premium',
-        premiumFeatures: newCourse.premiumFeatures,
-        tags: newCourse.tags,
-        difficulty: newCourse.difficulty,
-        language: newCourse.language,
-        requirements: newCourse.requirements,
-        learningOutcomes: newCourse.learningOutcomes,
-        educator: newCourse.educator,
-        createdAt: newCourse.createdAt,
-        updatedAt: newCourse.updatedAt
+        id: doc._id,
+        title: doc.courseTitle,
+        type: doc.courseType,
+        category: doc.category,
+        promoUrl: doc.promoUrl, // <-- NEW
+        thumbnail: doc.courseThumbnail,
+        price: doc.coursePrice,
+        discount: doc.discount,
+        totalLectures: doc.totalLectures,
+        totalDuration: doc.totalDuration,
+        formattedDuration: doc.formattedDuration,
+        finalPrice: doc.finalPrice,
+        isPremium: doc.courseType === 'premium',
+        premiumFeatures: doc.premiumFeatures,
+        tags: doc.tags,
+        difficulty: doc.difficulty,
+        language: doc.language,
+        requirements: doc.requirements,
+        learningOutcomes: doc.learningOutcomes,
+        educator: doc.educator,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt
       }
     });
 
-  } catch (error) {
-    console.error('Add course error details:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      code: error.code
-    });
-
-    // Cleanup temp file on error
-    if (req.file && req.file.path) {
-      try {
-        const fs = await import('fs');
-        fs.unlinkSync(req.file.path);
-      } catch (cleanupError) {
-        console.error('Failed to clean up temporary file:', cleanupError);
-      }
+  } catch (err) {
+    if (err.name === 'ValidationError') {
+      const msgs = Object.values(err.errors).map(e => e.message);
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: msgs });
     }
-
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: "Course validation failed",
-        errors: messages
-      });
-    }
-
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: "A course with this title already exists"
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to create course",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    if (err.code === 11000) return res.status(400).json({ success: false, message: 'A course with this title already exists' });
+    res.status(500).json({ success: false, message: 'Failed to create course', error: process.env.NODE_ENV === 'development' ? err.message : undefined });
   }
 };
+
+
+
 
 
 // get Educator Courses
