@@ -42,13 +42,14 @@ export const adminSignup = async (req, res) => {
     const token = admin.generateToken();
 
     // Set HTTP-only cookie for development
-    res.cookie('admin_token', token, {
-      httpOnly: true,
-      secure: false, // false for development (http://localhost)
-      sameSite: 'lax', // 'lax' works better for development
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/'
-    });
+res.cookie('admin_token', token, {
+  httpOnly: true,
+  secure: true,          // MUST be true in production (HTTPS)
+  sameSite: 'none',      // REQUIRED for cross-domain cookies
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/'
+});
+
 
     res.status(201).json({
       success: true,
@@ -105,13 +106,14 @@ export const adminLogin = async (req, res) => {
     const token = admin.generateToken();
 
     // Set HTTP-only cookie for development
-    res.cookie('admin_token', token, {
-      httpOnly: true,
-      secure: false, // false for development
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/'
-    });
+res.cookie('admin_token', token, {
+  httpOnly: true,
+  secure: true,          // MUST be true in production (HTTPS)
+  sameSite: 'none',      // REQUIRED for cross-domain cookies
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/'
+});
+
 
     res.json({
       success: true,
