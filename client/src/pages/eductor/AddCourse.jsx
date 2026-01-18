@@ -48,6 +48,13 @@ const AddCourse = () => {
   const [currentLecture, setCurrentLecture] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // NEW: course overview / promo video
+  const [promoUrl, setPromoUrl] = useState('');
+  const [promoUploadMethod, setPromoUploadMethod] = useState('cloudinary');
+  const [promoUrlInput, setPromoUrlInput] = useState('');
+  const [promoUploading, setPromoUploading] = useState(false);
+  const [promoUploadProgress, setPromoUploadProgress] = useState(0);
+
   // Premium course features
   const [premiumFeatures, setPremiumFeatures] = useState({
     socialLinks: {
@@ -121,7 +128,7 @@ const AddCourse = () => {
   // Load Cloudinary Widget Script
   useEffect(() => {
     const script = document.createElement('script');
-    script.src = 'https://widget.cloudinary.com/v2.0/global/all.js';
+    script.src = 'https://widget.cloudinary.com/v2.0/global/all.js ';
     script.async = true;
     document.body.appendChild(script);
 
@@ -142,6 +149,108 @@ const AddCourse = () => {
       }
     }));
   };
+
+  // ---------- PROMO VIDEO HELPERS ----------
+  const openPromoCloudinaryWidget = () => {
+    if (!window.cloudinary) {
+      toast.error('Cloudinary is loading, please wait...');
+      return;
+    }
+    setPromoUploading(true);
+    setPromoUploadProgress(0);
+    window.cloudinary.openUploadWidget(
+      {
+        cloudName: 'dhqe7gm5e',
+        uploadPreset: 'course_lectures',
+        sources: ['local', 'url', 'camera', 'dropbox', 'google_drive'],
+        multiple: false,
+        resourceType: 'video',
+        clientAllowedFormats: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'ogg', 'm4v'],
+        maxFileSize: 200000000,
+        folder: 'course-promos',
+        tags: ['promo', 'course-overview'],
+      },
+      (error, result) => {
+        if (!error && result && result.event === 'success') {
+          const url = result.info.secure_url;
+          setPromoUrl(url);
+          setPromoUrlInput(url);
+          toast.success('Course overview video uploaded to Cloudinary!');
+          setPromoUploadProgress(100);
+        } else if (error) {
+          toast.error(`Upload failed: ${error.message || 'Please try again.'}`);
+          console.error(error);
+        }
+        setPromoUploading(false);
+      }
+    );
+  };
+
+  const uploadPromoVideoDirect = async (file) => {
+    setPromoUploading(true);
+    setPromoUploadProgress(0);
+    try {
+      const cloudName = 'dhqe7gm5e';
+      const uploadPreset = 'course_lectures';
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+      formData.append('folder', 'course-promos');
+      formData.append('tags', 'promo,course-overview');
+
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/ ${cloudName}/upload`,
+        formData,
+        {
+          onUploadProgress: (e) => {
+            const p = Math.round((e.loaded * 100) / e.total);
+            setPromoUploadProgress(p);
+          },
+        }
+      );
+      const url = response.data.secure_url;
+      setPromoUrl(url);
+      setPromoUrlInput(url);
+      toast.success('Course overview video uploaded to Cloudinary!');
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error?.message || 'Failed to upload promo video');
+    } finally {
+      setPromoUploading(false);
+    }
+  };
+
+  const handlePromoFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const allowed = ['video/mp4', 'video/mov', 'video/avi', 'video/mkv', 'video/webm', 'video/ogg'];
+    const max = 200 * 1024 * 1024;
+    if (!allowed.includes(file.type)) {
+      toast.error('Invalid video format. Please upload MP4, MOV, AVI, MKV, WEBM, or OGG files.');
+      return;
+    }
+    if (file.size > max) {
+      toast.error('Video file too large. Maximum size is 200MB.');
+      return;
+    }
+    uploadPromoVideoDirect(file);
+  };
+
+  const handlePromoUrlInput = () => {
+    if (!promoUrlInput.trim()) {
+      toast.error('Please enter a video URL');
+      return;
+    }
+    try {
+      new URL(promoUrlInput);
+      setPromoUrl(promoUrlInput);
+      toast.success('Course overview URL added!');
+    } catch {
+      toast.error('Please enter a valid URL');
+    }
+  };
+
+  // ---------- END PROMO VIDEO HELPERS ----------
 
   // Handle handout file upload to Cloudinary
   const handleHandoutUpload = async (e) => {
@@ -184,7 +293,7 @@ const AddCourse = () => {
       formData.append('tags', 'handout,education');
 
       const response = await axios.post(
-        `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
+        `https://api.cloudinary.com/v1_1/ ${cloudName}/upload`,
         formData,
         {
           onUploadProgress: (progressEvent) => {
@@ -301,7 +410,7 @@ const AddCourse = () => {
       formData.append('tags', 'lecture,education');
 
       const response = await axios.post(
-        `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
+        `https://api.cloudinary.com/v1_1/ ${cloudName}/upload`,
         formData,
         {
           onUploadProgress: (progressEvent) => {
@@ -546,6 +655,7 @@ const AddCourse = () => {
         coursePrice: Number(coursePrice),
         discount: Number(discount),
         category, // ← CATEGORY ADDED HERE
+        promoUrl, // ← PROMO VIDEO ADDED HERE
         courseContent: chapters.map(chapter => ({
           chapterId: chapter.chapterId,
           chapterOrder: chapter.chapterOrder,
@@ -609,6 +719,7 @@ const AddCourse = () => {
         setLanguage('English');
         setRequirements([]);
         setLearningOutcomes([]);
+        setPromoUrl('');
         setPremiumFeatures({
           socialLinks: {
             facebook: '',
@@ -813,6 +924,176 @@ const AddCourse = () => {
                 </div>
               </div>
 
+              {/* NEW: Course Overview / Promo Video */}
+              <div className='lg:col-span-2'>
+                <label className='block text-sm font-medium text-gray-700 mb-2'>
+                  Course Overview Video
+                </label>
+                <div className='flex space-x-4 mb-4'>
+                  <button
+                    type='button'
+                    onClick={() => setPromoUploadMethod('cloudinary')}
+                    className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm transition-all ${promoUploadMethod === 'cloudinary'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:border-gray-400'}`}
+                  >
+                    Upload Video
+                  </button>
+                  <button
+                    type='button'
+                    onClick={() => setPromoUploadMethod('url')}
+                    className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm transition-all ${promoUploadMethod === 'url'
+                      ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium'
+                      : 'border-gray-300 hover:border-gray-400'}`}
+                  >
+                    Enter URL
+                  </button>
+                </div>
+
+                {promoUploadMethod === 'cloudinary' ? (
+                  <>
+                    {promoUrl ? (
+                      <div className='bg-green-50 border border-green-200 rounded-lg p-4 mb-4'>
+                        <div className='flex items-center justify-between'>
+                          <div className='flex items-center space-x-3'>
+                            <div className='w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center'>
+                              <svg className='w-5 h-5 text-green-600' fill='currentColor' viewBox='0 0 20 20'>
+                                <path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z' clipRule='evenodd' />
+                              </svg>
+                            </div>
+                            <div>
+                              <span className='text-green-700 font-medium'>Course overview video uploaded!</span>
+                              <p className='text-sm text-green-600 truncate max-w-xs'>{promoUrl}</p>
+                            </div>
+                          </div>
+                          <button
+                            type='button'
+                            onClick={() => setPromoUrl('')}
+                            className='text-red-600 hover:text-red-800 font-medium text-sm'
+                          >
+                            Change
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='space-y-4'>
+                        <button
+                          type='button'
+                          onClick={openPromoCloudinaryWidget}
+                          disabled={promoUploading}
+                          className={`w-full p-6 border-2 border-dashed rounded-xl text-center transition-all ${promoUploading
+                            ? 'border-gray-300 bg-gray-50 text-gray-500 cursor-not-allowed'
+                            : 'border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:border-blue-400'}`}
+                        >
+                          {promoUploading ? (
+                            <div className='space-y-2'>
+                              <div className='w-12 h-12 mx-auto border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin' />
+                              <p>Uploading... {promoUploadProgress}%</p>
+                            </div>
+                          ) : (
+                            <>
+                              <svg className='w-12 h-12 mx-auto mb-3 text-blue-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                                <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12' />
+                              </svg>
+                              <p className='font-medium'>Click to upload course overview video</p>
+                              <p className='text-sm mt-1'>MP4, MOV, AVI up to 200MB</p>
+                            </>
+                          )}
+                        </button>
+                        <div className='text-center'>
+                          <span className='text-gray-500 text-sm'>OR</span>
+                        </div>
+                        <div className='relative'>
+                          <input
+                            type='file'
+                            id='promoFileUpload'
+                            onChange={handlePromoFile}
+                            accept='video/mp4,video/mov,video/avi,video/mkv,video/webm,video/ogg'
+                            className='hidden'
+                          />
+                          <label
+                            htmlFor='promoFileUpload'
+                            className={`block w-full p-6 border-2 border-dashed rounded-xl text-center transition-all cursor-pointer ${promoUploading
+                              ? 'border-gray-300 bg-gray-50 text-gray-500 cursor-not-allowed'
+                              : 'border-green-300 bg-green-50 hover:bg-green-100 text-green-700 hover:border-green-400'}`}
+                          >
+                            <svg className='w-12 h-12 mx-auto mb-3 text-green-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M15 13l-3-3m0 0l-3 3m3-3v12' />
+                            </svg>
+                            <p className='font-medium'>Choose video file for direct upload</p>
+                            <p className='text-sm mt-1'>MP4, MOV, AVI, MKV, WEBM, OGG up to 200MB</p>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    {promoUploading && (
+                      <div className='mt-4'>
+                        <div className='flex justify-between text-sm text-gray-600 mb-1'>
+                          <span>Uploading to Cloudinary...</span>
+                          <span>{promoUploadProgress}%</span>
+                        </div>
+                        <div className='h-2 bg-gray-200 rounded-full overflow-hidden'>
+                          <div
+                            className='h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300'
+                            style={{ width: `${promoUploadProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className='space-y-4'>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-2'>Enter Video URL</label>
+                      <div className='flex space-x-2'>
+                        <input
+                          type='url'
+                          value={promoUrlInput}
+                          onChange={e => setPromoUrlInput(e.target.value)}
+                          placeholder='https://example.com/video.mp4 or Cloudinary URL'
+                          className='flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none'
+                        />
+                        <button
+                          type='button'
+                          onClick={handlePromoUrlInput}
+                          className='px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors'
+                        >
+                          Add URL
+                        </button>
+                      </div>
+                      <p className='text-xs text-gray-500 mt-2'>Supports Cloudinary, YouTube, Vimeo, or direct video links</p>
+                    </div>
+                    {promoUrl && (
+                      <div className='bg-green-50 border border-green-200 rounded-lg p-4'>
+                        <div className='flex items-center justify-between'>
+                          <div className='flex items-center space-x-3'>
+                            <div className='w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center'>
+                              <svg className='w-5 h-5 text-green-600' fill='currentColor' viewBox='0 0 20 20'>
+                                <path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z' clipRule='evenodd' />
+                              </svg>
+                            </div>
+                            <div>
+                              <span className='text-green-700 font-medium'>Course overview URL added!</span>
+                              <p className='text-sm text-green-600 truncate max-w-xs'>{promoUrl}</p>
+                            </div>
+                          </div>
+                          <button
+                            type='button'
+                            onClick={() => {
+                              setPromoUrl('');
+                              setPromoUrlInput('');
+                            }}
+                            className='text-red-600 hover:text-red-800 font-medium text-sm'
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Difficulty */}
               <div>
                 <label className='block text-sm font-medium text-gray-700 mb-2'>
@@ -1013,7 +1294,7 @@ const AddCourse = () => {
                         type="url"
                         value={premiumFeatures.socialLinks.facebook}
                         onChange={(e) => handleSocialLinkChange('facebook', e.target.value)}
-                        placeholder="https://facebook.com/groups/your-group"
+                        placeholder="https://facebook.com/groups/your-group "
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                       />
                     </div>
@@ -1030,7 +1311,7 @@ const AddCourse = () => {
                         type="url"
                         value={premiumFeatures.socialLinks.whatsapp}
                         onChange={(e) => handleSocialLinkChange('whatsapp', e.target.value)}
-                        placeholder="https://chat.whatsapp.com/invite/your-group"
+                        placeholder="https://chat.whatsapp.com/invite/your-group "
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                       />
                     </div>
@@ -1047,7 +1328,7 @@ const AddCourse = () => {
                         type="url"
                         value={premiumFeatures.socialLinks.telegram}
                         onChange={(e) => handleSocialLinkChange('telegram', e.target.value)}
-                        placeholder="https://t.me/your-group"
+                        placeholder="https://t.me/your-group "
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                       />
                     </div>
@@ -1055,7 +1336,7 @@ const AddCourse = () => {
                       <label className='block text-sm font-medium text-gray-700 mb-2'>
                         <span className='flex items-center'>
                           <svg className="w-4 h-4 mr-2 text-indigo-500" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515a.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0a12.64 12.64 0 00-.617-1.25a.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057a19.9 19.9 0 005.993 3.03a.078.078 0 00.084-.028a14.09 14.09 0 001.226-1.994a.076.076 0 00-.041-.106a13.107 13.107 0 01-1.872-.892a.077.077 0 01-.008-.128c.125-.094.251-.188.372-.284a.076.076 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.076.076 0 01.078.01c.12.096.245.19.371.284a.077.077 0 01-.006.127a12.3 12.3 0 01-1.873.892a.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028a19.839 19.839 0 006.002-3.03a.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z" />
+                            <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515a.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0a12.64 12.64 0 00-.617-1.25a.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057a19.9 19.9 0 005.993 3.03a.078.078 0 00.084-.028a14.09 14.09 0 001.226-1.994a.076.076 0 00-.041-.106a13.107 13.107 0 01-1.872-.892a.077.077 0 01-.008-.128c.125-.094.251-.188.372-.284a.076.076 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.076.076 0 01.078.01c.12.096.245.19.371.284a.077.077 0 01-.006.127a12.3 12.3 0 01-1.873.892a.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028a19.839 19.839 0 006.002-3.03a.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM11.944 17.168c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z" />
                           </svg>
                           Discord Server Link
                         </span>
@@ -1064,7 +1345,7 @@ const AddCourse = () => {
                         type="url"
                         value={premiumFeatures.socialLinks.discord}
                         onChange={(e) => handleSocialLinkChange('discord', e.target.value)}
-                        placeholder="https://discord.gg/your-server"
+                        placeholder="https://discord.gg/your-server "
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                       />
                     </div>
@@ -1163,9 +1444,9 @@ const AddCourse = () => {
                           <svg className="w-12 h-12 mx-auto mb-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                           </svg>
-                          <p className="font-medium">Click to upload handout materials</p>
-                          <p className="text-sm mt-1">PDF, Word, Excel, PowerPoint, Images, Text files up to 50MB</p>
-                          <p className="text-xs text-amber-600 mt-1">Using course_lectures upload preset</p>
+                          <p className='font-medium'>Click to upload handout materials</p>
+                          <p className='text-sm mt-1'>PDF, Word, Excel, PowerPoint, images, or text files up to 50MB</p>
+                          <p className='text-xs text-amber-600 mt-1'>Using course_lectures upload preset</p>
                         </>
                       )}
                     </button>
@@ -1339,16 +1620,7 @@ const AddCourse = () => {
                               </div>
                             </div>
                             <div className='flex items-center space-x-2'>
-                              <button
-                                onClick={() => handleLecture('preview', chapter.chapterId, lectureIndex)}
-                                className='text-blue-600 hover:text-blue-800 p-1 opacity-0 group-hover:opacity-100 transition-opacity'
-                                title='Preview Video'
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              </button>
+                              {/* PREVIEW BUTTON REMOVED */}
                               <button
                                 onClick={() => handleLecture('remove', chapter.chapterId, lectureIndex)}
                                 className='text-gray-400 hover:text-red-500 p-1'
@@ -1406,6 +1678,7 @@ const AddCourse = () => {
                   setLanguage('English');
                   setRequirements([]);
                   setLearningOutcomes([]);
+                  setPromoUrl('');
                   setPremiumFeatures({
                     socialLinks: {
                       facebook: '',
@@ -1656,7 +1929,7 @@ const AddCourse = () => {
                             type="url"
                             value={videoUrlInput}
                             onChange={e => setVideoUrlInput(e.target.value)}
-                            placeholder="https://example.com/video.mp4 or Cloudinary URL"
+                            placeholder="https://example.com/video.mp4  or Cloudinary URL"
                             className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                           />
                           <button
