@@ -9,7 +9,7 @@ import { toast } from 'react-toastify';
 export const AppContext = createContext();
 
 export const AppContextProvider = ({ children }) => {
-  const backendUrl = "https://educations.onrender.com";
+  const backendUrl = " http://localhost:4000";
   const currency = "₦";
   const navigate = useNavigate();
 

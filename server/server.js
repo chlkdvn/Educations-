@@ -25,6 +25,7 @@ import jwt from "jsonwebtoken";
 import User from "./models/User.js";
 import Conversation from "./models/Conversation.js";
 import Message from "./models/Message.js";
+import airouter from "./router/AiRouter.js";
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use("/api/course", courseRouter);
 app.use("/api/user", userRouter);
 app.use("/api/admin", AdminRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api", airouter)  ;
 
 // -----------------------------
 // 6️⃣ Socket.io Setup (NEW)

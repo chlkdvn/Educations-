@@ -7,26 +7,9 @@ import Footer from '../../components/student/Footer';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
-  Clock,
-  Users,
-  Star,
-  ChevronDown,
-  CheckCircle,
-  Award,
-  FileText,
-  HelpCircle,
-  Play,
-  Globe,
-  BarChart3,
-  Target,
-  Check,
-  Zap,
-  MessageSquare,
-  Video,
-  Users as UsersIcon,
-  Briefcase,
-  BookOpen,
-  Lock
+  Clock, Users, Star, ChevronDown, CheckCircle, Award, FileText, HelpCircle,
+  Play, Globe, BarChart3, Target, Check, Zap, MessageSquare, Video,
+  Users as UsersIcon, Briefcase, BookOpen, Lock
 } from 'lucide-react';
 
 const CourseDetails = () => {
@@ -39,132 +22,78 @@ const CourseDetails = () => {
   const [previewUrl, setPreviewUrl] = useState('');
 
   const {
-    calculateRating,
-    backendUrl,
-    userData,
-    calculateNoOfLectures,
-    CalculateCourseDuration,
-    getToken,
-    CalculateChapterTime,
-    currency
+    calculateRating, backendUrl, userData, calculateNoOfLectures,
+    CalculateCourseDuration, getToken, CalculateChapterTime, currency
   } = useContext(AppContext);
 
+  /* -------------------------------------------------- */
   const fetchCourseData = async () => {
     try {
       const { data } = await axios.get(`${backendUrl}/api/course/${id}`);
       if (data.success) {
         setCourseData(data.courseData);
         const firstFreePreview = data.courseData.courseContent
-          ?.flatMap(chapter => chapter.chapterContent)
-          ?.find(lecture => lecture.isPreviewFree && lecture.lectureUrl);
-        if (firstFreePreview) {
-          setPreviewUrl(firstFreePreview.lectureUrl);
-        }
-      } else {
-        toast.error(data.message || "Failed to load course");
-      }
-    } catch (error) {
-      toast.error("Something went wrong while loading course details");
-      console.error(error);
+          ?.flatMap(ch => ch.chapterContent)
+          ?.find(l => l.isPreviewFree && l.lectureUrl);
+        if (firstFreePreview) setPreviewUrl(firstFreePreview.lectureUrl);
+      } else toast.error(data.message || 'Failed to load course');
+    } catch (err) {
+      toast.error('Something went wrong while loading course details');
+      console.error(err);
     }
   };
 
+  useEffect(() => { fetchCourseData(); }, [id]);
+
+  useEffect(() => {
+    if (userData && courseData)
+      setIsAlreadyEnrolled(userData.enrolledCourse?.includes(courseData._id));
+  }, [userData, courseData]);
+
+  /* -------------------------------------------------- */
   const enrollCourse = async () => {
-    if (!userData) {
-      return toast.warn('Please login to enroll in this course');
-    }
-
-    if (isAlreadyEnrolled) {
-      return toast.info('You are already enrolled in this course');
-    }
-
+    if (!userData) return toast.warn('Please login to enroll');
+    if (isAlreadyEnrolled) return toast.info('You are already enrolled');
     setIsLoading(true);
-
     try {
       const token = await getToken();
-
       const { data } = await axios.post(
         `${backendUrl}/api/user/initializeCoursePayment`,
         { courseId: courseData._id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      // Case 1: User is already enrolled (backend safety check)
       if (data.alreadyEnrolled) {
-        toast.success("You are already enrolled in this course!");
+        toast.success('You are already enrolled!');
         setIsAlreadyEnrolled(true);
-        window.location.href = "/my-enrollments"; // Full redirect - safe here
+        window.location.href = '/my-enrollments';
         return;
       }
-
-      // Case 2: Payment initialization successful → redirect to Paystack
       if (data.success && data.authorization_url) {
-        // Critical: Full browser redirect to Paystack checkout
         window.location.href = data.authorization_url;
-        // Execution stops here — user leaves the React app
         return;
       }
-
-      // Case 3: Any other response = error
-      toast.error(data.message || "Unable to start payment. Please try again.");
-    } catch (error) {
-      console.error("Payment initialization error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        "Payment failed. Please check your internet and try again.";
-      toast.error(errorMessage);
+      toast.error(data.message || 'Unable to start payment');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Payment failed');
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchCourseData();
-  }, [id]);
+  /* -------------------------------------------------- */
+  const toggleSection = (chapterId) =>
+    setOpenSections(p => ({ ...p, [chapterId]: !p[chapterId] }));
 
-  useEffect(() => {
-    if (userData && courseData) {
-      setIsAlreadyEnrolled(userData.enrolledCourse?.includes(courseData._id));
-    }
-  }, [userData, courseData]);
-
-  const toggleSection = (chapterId) => {
-    setOpenSections(prev => ({
-      ...prev,
-      [chapterId]: !prev[chapterId]
-    }));
+  const openPreview = (url) => {
+    if (url) { setPreviewUrl(url); setPreviewOpen(true); }
   };
 
-  const openPreview = (lectureUrl) => {
-    if (lectureUrl) {
-      setPreviewUrl(lectureUrl);
-      setPreviewOpen(true);
-    }
+  const getDifficultyBadge = (d) => {
+    const map = { beginner: 'bg-green-100 text-green-800', intermediate: 'bg-yellow-100 text-yellow-800', advanced: 'bg-red-100 text-red-800', expert: 'bg-purple-100 text-purple-800' };
+    return map[d?.toLowerCase()] || 'bg-gray-100 text-gray-800';
   };
 
-  const getDifficultyBadge = (difficulty) => {
-    const colors = {
-      beginner: 'bg-green-100 text-green-800',
-      intermediate: 'bg-yellow-100 text-yellow-800',
-      advanced: 'bg-red-100 text-red-800',
-      expert: 'bg-purple-100 text-purple-800'
-    };
-    return colors[difficulty?.toLowerCase()] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getLanguageFlag = (language) => {
-    const flags = {
-      'English': '🇺🇸',
-      'Spanish': '🇪🇸',
-      'French': '🇫🇷',
-      'German': '🇩🇪',
-      'Chinese': '🇨🇳',
-      'Japanese': '🇯🇵',
-      'Hindi': '🇮🇳',
-      'Arabic': '🇦🇪'
-    };
-    return flags[language] || '🌐';
-  };
+  const flag = (lang) => ({ English: '🇺🇸', Spanish: '🇪🇸', French: '🇫🇷', German: '🇩🇪', Chinese: '🇨🇳', Japanese: '🇯🇵', Hindi: '🇮🇳', Arabic: '🇦🇪' }[lang] || '🌐');
 
   if (!courseData) return <Loading />;
 
@@ -176,43 +105,34 @@ const CourseDetails = () => {
   const courseRating = calculateRating(courseData);
   const totalDuration = CalculateCourseDuration(courseData);
   const premiumFeatures = courseData.premiumFeatures || {};
+  const completedLectures = courseData.courseContent?.reduce((acc, ch) =>
+    acc + (ch.chapterContent?.filter(l => l.completed)?.length || 0), 0) || 0;
+  const completionPercentage = totalLectures ? Math.round((completedLectures / totalLectures) * 100) : 0;
 
-  const completedLectures = courseData.courseContent?.reduce((acc, chapter) => {
-    return acc + (chapter.chapterContent?.filter(lec => lec.completed)?.length || 0);
-  }, 0) || 0;
-
-  const completionPercentage = totalLectures > 0 ? Math.round((completedLectures / totalLectures) * 100) : 0;
-
+  /* -------------------------------------------------- */
   return (
     <>
-      {/* Preview Modal */}
-      {previewOpen && previewUrl && (
+      {/* ---------- PREVIEW MODAL ---------- */}
+      {previewOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="font-bold text-lg">Course Preview</h3>
-              <button onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-700">
-                ✕
-              </button>
+              <button onClick={() => setPreviewOpen(false)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <div className="aspect-video">
-              <iframe
-                src={previewUrl}
-                className="w-full h-full"
-                allowFullScreen
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
+              <iframe src={previewUrl} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
             </div>
           </div>
         </div>
       )}
 
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-        {/* Header */}
+        {/* ---------- HERO ---------- */}
         <div className="bg-gradient-to-r from-blue-50 via-white to-indigo-50 border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex flex-col lg:flex-row gap-8 items-start">
-              {/* Content */}
+              {/* left content */}
               <div className="flex-1 w-full">
                 <div className="flex flex-wrap gap-3 mb-4">
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyBadge(courseData.difficulty)}`}>
@@ -227,7 +147,7 @@ const CourseDetails = () => {
                     </span>
                   )}
                   <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm font-medium flex items-center gap-1">
-                    <Globe className="w-3 h-3" /> {getLanguageFlag(courseData.language)} {courseData.language}
+                    <Globe className="w-3 h-3" /> {flag(courseData.language)} {courseData.language}
                   </span>
                 </div>
 
@@ -242,15 +162,18 @@ const CourseDetails = () => {
                   />
                 </div>
 
-                {courseData.educatorInfo && (
+                {/* ---------- EDUCATOR CARD (NEW) ---------- */}
+                {courseData.FindEductor && (
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xl">
-                      {courseData.educatorInfo.name?.charAt(0) || 'E'}
-                    </div>
+                    <img
+                      src={courseData.FindEductor.imageUrl}
+                      alt={courseData.FindEductor.name}
+                      className="w-14 h-14 rounded-full object-cover"
+                    />
                     <div>
                       <h4 className="font-bold text-gray-900">Instructor</h4>
-                      <p className="text-gray-600">{courseData.educatorInfo.name || 'Course Instructor'}</p>
-                      <p className="text-sm text-gray-500">{courseData.educatorInfo.bio || 'Expert educator'}</p>
+                      <p className="text-gray-600">{courseData.FindEductor.name}</p>
+                      <p className="text-sm text-gray-500">{courseData.FindEductor.email}</p>
                     </div>
                   </div>
                 )}
@@ -272,14 +195,30 @@ const CourseDetails = () => {
                 </div>
               </div>
 
-              {/* Thumbnail */}
+              {/* ---------- THUMBNAIL + PROMO VIDEO (NEW) ---------- */}
               <div className="w-full lg:w-96">
                 <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-                  <img
-                    src={courseData.courseThumbnail}
-                    alt={courseData.courseTitle}
-                    className="w-full h-64 lg:h-80 object-cover"
-                  />
+                  {/* Promo video first (if exists) */}
+                  {courseData.promoUrl && (
+                    <div className="aspect-video bg-black">
+                      <video
+                        src={courseData.promoUrl}
+                        controls
+                        poster={courseData.courseThumbnail}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  {/* Fallback thumbnail when no promo */}
+                  {!courseData.promoUrl && (
+                    <img
+                      src={courseData.courseThumbnail}
+                      alt={courseData.courseTitle}
+                      className="w-full h-64 lg:h-80 object-cover"
+                    />
+                  )}
+
+                  {/* Free-preview overlay (unchanged) */}
                   {previewUrl && (
                     <button
                       onClick={() => openPreview(previewUrl)}
@@ -297,10 +236,10 @@ const CourseDetails = () => {
           </div>
         </div>
 
-        {/* Main + Sidebar */}
+        {/* ---------- MAIN LAYOUT ---------- */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col lg:flex-row gap-8">
-            {/* Main Content */}
+            {/* LEFT: CONTENT */}
             <div className="flex-1 order-2 lg:order-1">
               {/* Learning Outcomes */}
               {courseData.learningOutcomes?.length > 0 && (
@@ -310,10 +249,10 @@ const CourseDetails = () => {
                     What You'll Learn
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {courseData.learningOutcomes.map((outcome, idx) => (
-                      <div key={idx} className="flex items-start gap-3">
+                    {courseData.learningOutcomes.map((o, i) => (
+                      <div key={i} className="flex items-start gap-3">
                         <Check className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" />
-                        <span className="text-gray-700">{outcome}</span>
+                        <span className="text-gray-700">{o}</span>
                       </div>
                     ))}
                   </div>
@@ -326,7 +265,7 @@ const CourseDetails = () => {
                   <h2 className="text-2xl font-bold text-gray-900 mb-4">Requirements</h2>
                   <div className="bg-gray-50 rounded-xl p-6">
                     <ul className="list-disc list-inside space-y-2 text-gray-700">
-                      {courseData.requirements.map((req, idx) => <li key={idx}>{req}</li>)}
+                      {courseData.requirements.map((r, i) => <li key={i}>{r}</li>)}
                     </ul>
                   </div>
                 </div>
@@ -450,9 +389,7 @@ const CourseDetails = () => {
                       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100">
                         <MessageSquare className="w-10 h-10 text-blue-600 mb-4" />
                         <h3 className="font-bold text-gray-900 mb-2">Instructor Assistance</h3>
-                        <p className="text-gray-600 text-sm">
-                          {premiumFeatures.assistanceHours} hours of direct support
-                        </p>
+                        <p className="text-gray-600 text-sm">{premiumFeatures.assistanceHours} hours of direct support</p>
                       </div>
                     )}
                     {premiumFeatures.hasCertificate && (
@@ -466,18 +403,14 @@ const CourseDetails = () => {
                       <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-2xl border border-purple-100">
                         <Video className="w-10 h-10 text-purple-600 mb-4" />
                         <h3 className="font-bold text-gray-900 mb-2">Live Sessions</h3>
-                        <p className="text-gray-600 text-sm">
-                          Schedule: {premiumFeatures.liveSessionSchedule || 'To be announced'}
-                        </p>
+                        <p className="text-gray-600 text-sm">Schedule: {premiumFeatures.liveSessionSchedule || 'To be announced'}</p>
                       </div>
                     )}
                     {premiumFeatures.hasCommunityAccess && (
                       <div className="bg-gradient-to-br from-orange-50 to-red-50 p-6 rounded-2xl border border-orange-100">
                         <UsersIcon className="w-10 h-10 text-orange-600 mb-4" />
                         <h3 className="font-bold text-gray-900 mb-2">Community Access</h3>
-                        <p className="text-gray-600 text-sm">
-                          Join our {premiumFeatures.communityType} community
-                        </p>
+                        <p className="text-gray-600 text-sm">Join our {premiumFeatures.communityType} community</p>
                       </div>
                     )}
                     {premiumFeatures.hasStudyGroups && (
@@ -503,27 +436,17 @@ const CourseDetails = () => {
                 <div className="mb-12">
                   <h2 className="text-2xl font-bold text-gray-900 mb-6">Course Resources</h2>
                   <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-                    {premiumFeatures.handouts.map((handout, idx) => (
-                      <div key={handout.id || idx} className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    {premiumFeatures.handouts.map((h, i) => (
+                      <div key={h.id || i} className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
-                          {isAlreadyEnrolled ? (
-                            <FileText className="w-8 h-8 text-blue-600" />
-                          ) : (
-                            <Lock className="w-8 h-8 text-gray-400" />
-                          )}
+                          {isAlreadyEnrolled ? <FileText className="w-8 h-8 text-blue-600" /> : <Lock className="w-8 h-8 text-gray-400" />}
                           <div>
-                            <h4 className="font-medium text-gray-900">{handout.name}</h4>
-                            <p className="text-sm text-gray-500">
-                              {(handout.size / 1024).toFixed(1)} KB • {handout.type}
-                            </p>
+                            <h4 className="font-medium text-gray-900">{h.name}</h4>
+                            <p className="text-sm text-gray-500">{(h.size / 1024).toFixed(1)} KB • {h.type}</p>
                           </div>
                         </div>
                         {isAlreadyEnrolled ? (
-                          <a
-                            href={handout.url}
-                            download
-                            className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100 transition-colors w-full sm:w-auto text-center"
-                          >
+                          <a href={h.url} download className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100 transition-colors w-full sm:w-auto text-center">
                             Download
                           </a>
                         ) : (
@@ -535,37 +458,27 @@ const CourseDetails = () => {
                     ))}
                   </div>
                   {!isAlreadyEnrolled && (
-                    <p className="text-sm text-gray-600 mt-3">
-                      Enroll in the course to access all downloadable resources
-                    </p>
+                    <p className="text-sm text-gray-600 mt-3">Enroll in the course to access all downloadable resources</p>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Sidebar */}
+            {/* ---------- SIDEBAR ---------- */}
             <div className="w-full lg:w-96 order-1 lg:order-2">
               <div className="lg:sticky lg:top-8">
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
                   <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-700">
                     <div className="flex flex-col sm:flex-row items-start sm:items-end gap-2 mb-4">
-                      <span className="text-5xl font-bold text-white">
-                        {currency}{finalPrice}
-                      </span>
+                      <span className="text-5xl font-bold text-white">{currency}{finalPrice}</span>
                       {courseData.discount > 0 && (
                         <div className="flex items-center gap-3">
-                          <span className="text-xl text-blue-200 line-through">
-                            {currency}{courseData.coursePrice}
-                          </span>
-                          <span className="bg-white text-blue-700 px-3 py-1 rounded-full font-bold text-sm">
-                            {courseData.discount}% OFF
-                          </span>
+                          <span className="text-xl text-blue-200 line-through">{currency}{courseData.coursePrice}</span>
+                          <span className="bg-white text-blue-700 px-3 py-1 rounded-full font-bold text-sm">{courseData.discount}% OFF</span>
                         </div>
                       )}
                     </div>
-                    <p className="text-blue-100 text-sm">
-                      {courseData.discount > 0 ? "Limited time offer" : "One-time payment"}
-                    </p>
+                    <p className="text-blue-100 text-sm">{courseData.discount > 0 ? 'Limited time offer' : 'One-time payment'}</p>
                   </div>
 
                   <div className="p-6 space-y-6">
