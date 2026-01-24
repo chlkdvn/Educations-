@@ -180,4 +180,8 @@ courseSchema.methods.getUserProgress = function () {
   return { completedLectures: 0, totalLectures: this.totalLectures, progressPercentage: 0 };
 };
 
+<<<<<<< HEAD
 export default mongoose.model('Course', courseSchema);
+=======
+export default mongoose.model('Course', courseSchema);
+>>>>>>> 9d55365a0b475bc88e9e34dd53240daaf844f8f4
