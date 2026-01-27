@@ -73,13 +73,27 @@ const OnboardingEducator = () => {
       const token = await getToken();
       const data = new FormData();
 
-      Object.keys(formData).forEach(key => data.append(key, formData[key]));
+      // Append all text fields
+      Object.keys(formData).forEach(key => {
+        if (formData[key]) { // Only append if value exists
+          data.append(key, formData[key]);
+        }
+      });
+
+      // Append the file. 
+      // IMPORTANT: The key 'profileImage' must match upload.single('profileImage') in the backend
       data.append('profileImage', image);
 
       const response = await axios.post(
         `${backendUrl}/api/educator/onboarding-educator`,
         data,
-              { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+            // DO NOT SET 'Content-Type': 'multipart/form-data' here
+            // Axios will set it automatically with the correct boundary
+          }
+        }
       );
 
       if (response.data.success) {
@@ -90,7 +104,8 @@ const OnboardingEducator = () => {
         toast.error(response.data.message);
       }
     } catch (error) {
-      const msg = error.response?.data?.message || 'Submission failed';
+      console.error("Submission error:", error);
+      const msg = error.response?.data?.message || error.message || 'Submission failed';
       toast.error(msg);
       if (msg.includes('already')) navigate('/');
     } finally {
@@ -200,7 +215,7 @@ const OnboardingEducator = () => {
                 name="github"
                 value={formData.github}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border ${errors.github ? 'border-red-300' : 'border-gray-300'} focus:border-cyan-500 uptline-none`}
+                className={`w-full px-4 py-3 rounded-lg border ${errors.github ? 'border-red-300' : 'border-gray-300'} focus:border-cyan-500 outline-none`}
                 placeholder="https://github.com/yourusername"
               />
               {errors.github && <p className="mt-1 text-sm text-red-600">{errors.github}</p>}
@@ -213,6 +228,7 @@ const OnboardingEducator = () => {
                 rows={4}
                 value={formData.bio}
                 onChange={handleChange}
+                maxLength={500}
                 className={`w-full px-4 py-3 rounded-lg border ${errors.bio ? 'border-red-300' : 'border-gray-300'} focus:border-cyan-500 outline-none resize-none`}
                 placeholder="Tell us about your coding journey and teaching experience..."
               />
@@ -223,11 +239,10 @@ const OnboardingEducator = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-4 rounded-lg font-bold text-white transition-all ${
-                  loading
+                className={`w-full py-4 rounded-lg font-bold text-white transition-all ${loading
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 shadow-lg'
-                }`}
+                  }`}
               >
                 {loading ? (
                   <span className="flex items-center justify-center">

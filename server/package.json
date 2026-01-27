@@ -29,6 +29,7 @@
     "paystack-api": "^2.0.6",
     "pdf-parse": "^2.4.5",
     "socket.io": "^4.8.3",
+    "streamifier": "^0.1.1",
     "stripe": "^18.4.0",
     "svix": "^1.42.0"
   }

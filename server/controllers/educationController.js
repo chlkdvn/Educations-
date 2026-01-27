@@ -8,6 +8,9 @@ import Educator from "../models/EducatorVerification.js"
 import { CertificateRequest } from '../models/CertificateRequest.js';
 import { Wallet } from "../models/wallet.js"
 import { Readable } from 'stream'; // Node built-in
+import streamifier from 'streamifier'
+
+
 export const updateRoleToEducator = async (req, res) => {
   try {
     const userId = req.auth.userId
@@ -260,12 +263,15 @@ export const getEnrolledStudentsData = async (req, res) => {
 }
 
 
+
+
 export const onboardingEducator = async (req, res) => {
   try {
     const auth = await req.auth();
     const userId = auth.userId;
-    console.log("userId", userId)
+    console.log("userId", userId);
     const imageFile = req.file;
+    console.log("imageFile", imageFile);
 
     const {
       fullName,
@@ -293,14 +299,30 @@ export const onboardingEducator = async (req, res) => {
       });
     }
 
-    // Upload profile image to Cloudinary
-    const imageUpload = await cloudinary.uploader.upload(imageFile.path, {
-      folder: "educators/pending",
-      width: 500,
-      height: 500,
-      crop: "fill",
-      gravity: "face",
-    });
+    // Upload profile image to Cloudinary using stream (buffer upload)
+    const streamUpload = (buffer) => {
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "educators/pending",
+            width: 500,
+            height: 500,
+            crop: "fill",
+            gravity: "face",
+          },
+          (error, result) => {
+            if (result) {
+              resolve(result);
+            } else {
+              reject(error);
+            }
+          }
+        );
+        streamifier.createReadStream(buffer).pipe(stream);
+      });
+    };
+
+    const imageUpload = await streamUpload(imageFile.buffer);
 
     // Save as PENDING — NOT approved yet
     await Educator.create({
@@ -312,7 +334,7 @@ export const onboardingEducator = async (req, res) => {
       github,
       linkedin: linkedin || "",
       profileImage: imageUpload.secure_url,
-      isApproved: false,        // ← Manual approval required
+      isApproved: false,
       appliedAt: new Date(),
     });
 
@@ -328,7 +350,6 @@ export const onboardingEducator = async (req, res) => {
     });
   }
 };
-
 
 
 
